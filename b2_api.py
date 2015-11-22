@@ -13,7 +13,7 @@ B2_ACCOUNT_ID = b'YOUR ID'
 B2_ACCOUNT_KEY = b'YOUR KEY'
 
 
-class B2O(object):
+class B2(object):
 
     def __init__(self, *args, **kwargs):
         self.auth_token = None
