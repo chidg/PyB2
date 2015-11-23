@@ -1,12 +1,14 @@
 import base64
 import requests
+import hashlib
 
 # Settings
 URLS = {
     'authorise_account_url': 'https://api.backblaze.com/b2api/v1/b2_authorize_account',
     'get_upload_url_url_suffix': '/b2api/v1/b2_get_upload_url',
     'list_buckets_url_suffix': '/b2api/v1/b2_list_buckets',
-    'create_bucket_url_suffix': '/b2api/v1/b2_create_bucket'
+    'create_bucket_url_suffix': '/b2api/v1/b2_create_bucket',
+    'list_file_names': '/b2api/v1/b2_list_file_names'
 }
 
 B2_ACCOUNT_ID = b'YOUR ID'
@@ -74,11 +76,12 @@ class B2Bucket(object):
         self.b2 = b2
         self.bucket_name = bucketName
         self.bucket_type = bucketType
+        self.auth_token = None
+        self.files = []
         if bucketId is not None:
             self.bucket_id = bucketId
         else:
             self.bucket_id = self.create()
-        self.upload_url = self.get_upload_url()
 
     def create(self):
         # TODO: Regex validation for acceptable bucket_name
@@ -100,7 +103,7 @@ class B2Bucket(object):
         else:
             raise Exception(r.text)
 
-    def get_upload_url(self):
+    def get_bucket_info(self):
         if self.b2.api_url is None or self.b2.auth_token is None:
             raise Exception('sorry, you need to authorise the account before you do anything else')
         r = requests.get('{}{}'.format(self.b2.api_url, URLS['get_upload_url_url_suffix']),
@@ -108,14 +111,79 @@ class B2Bucket(object):
                 headers={'Authorization': self.b2.auth_token}
             )
         if r.status_code == 200:
-            return r.json()['uploadUrl']
+            self.auth_token = r.json()['authorizationToken']
+            self.upload_url = r.json()['uploadUrl']
         else:
             raise Exception(r.text)
+
+    def upload_file(self, file_path):
+        if self.auth_token is None:
+            self.get_bucket_info()
+
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+            sha1_data = hashlib.sha1(file_data).hexdigest()
+
+            headers = {
+                'Authorization' : self.auth_token,
+                'X-Bz-File-Name' : file_path,
+                'Content-Type' : 'b2/x-auto',
+                'X-Bz-Content-Sha1' : sha1_data
+            }
+
+            r = requests.post(self.upload_url, data=file_data, headers=headers)
+            if r.status_code == 200:
+                new_file = B2File(**r.json())
+                self.files.append(new_file)
+            else:
+                raise Exception(r.text)
+
+    def get_files(self):
+        r = requests.get('{}{}'.format(self.b2.api_url, URLS['list_file_names']),
+                params={'bucketId' : self.bucket_id},
+                headers={'Authorization': self.b2.auth_token}
+            )
+        if r.status_code == 200:
+            for b2_file in r.json()['files']:
+                new_file = B2File(self, **b2_file)
+                if new_file not in self.files:
+                    self.files.append(new_file)
+        else:
+            raise Exception(r.text)
+
+    def list_files(self):
+        if self.files:
+            for b2_file in self.files:
+                print(str(b2_file))
+
 
     def __str__(self):
         return "bucket id: {}, bucket name: {}, bucket type: {}".format(
             self.bucket_id,
             self.bucket_name,
             self.bucket_type
+        )
+
+
+class B2File(object):
+
+    kwargs_case_map = {
+        'action': 'action',
+        'fileName': 'file_name',
+        'size': 'size',
+        'uploadTimestamp': 'upload_timestamp',
+        'fileId': 'file_id'
+        }
+
+    def __init__(self, bucket, *args, **kwargs):
+        self.bucket = bucket
+        for camel, snake in self.kwargs_case_map.items():
+            setattr(self, snake, kwargs.get(camel))
+
+    def __str__(self):
+        return "file id: {}, file name: {}, file type: {}".format(
+            self.file_id,
+            self.file_name,
+            self.action
         )
 
