@@ -1,7 +1,7 @@
 # PyB2
 Backblaze B2 API wrapper in Python
 
-Currently supports creation and listing of B2 Buckets.
+Currently supports authentication, creation and listing of B2 Buckets, and upload and listing files.
 Lots to do.
 
 How to use:
