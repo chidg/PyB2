@@ -1,5 +1,8 @@
+#!/usr/bin/env python3
+
 import base64
 import requests
+from requests.auth import HTTPBasicAuth
 import hashlib
 
 # Settings
@@ -11,8 +14,8 @@ URLS = {
     'list_file_names': '/b2api/v1/b2_list_file_names'
 }
 
-B2_ACCOUNT_ID = b'YOUR ID'
-B2_ACCOUNT_KEY = b'YOUR KEY'
+B2_ACCOUNT_ID = 'YOUR ID'
+B2_ACCOUNT_KEY = 'YOUR KEY'
 
 
 class B2(object):
@@ -25,10 +28,8 @@ class B2(object):
         self.authorise_account()
 
     def authorise_account(self):
-        id_and_key = base64.b64encode(B2_ACCOUNT_ID + b':' + B2_ACCOUNT_KEY)
-        basic_auth_string = b'Basic ' + id_and_key
-        headers = {'Authorization': basic_auth_string}
-        r = requests.get(URLS['authorise_account_url'], headers=headers)
+        url = URLS['authorise_account_url']
+        r  = requests.get( url, auth=HTTPBasicAuth(B2_ACCOUNT_ID, B2_ACCOUNT_KEY) )
         response_data = r.json()
         if r.status_code == 200:
             self.auth_token = response_data['authorizationToken']
